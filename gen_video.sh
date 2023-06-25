@@ -1,0 +1,1 @@
+manim -pql avoir-video/main_script.py AVOIRVideo
