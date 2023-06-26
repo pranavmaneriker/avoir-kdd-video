@@ -117,22 +117,59 @@ def avoir_probabilstic_est(s: Scene, scene_name="avoir_challenge"):
 def implementation(s: Scene, scene_name="implementaiton"):
     s.next_section(scene_name)
     chart_title = Tex(r"\section*{Implementation}")
-    chart_title.shift(2*UP)
+    chart_title.shift(3*UP)
     s.add(chart_title)
 
-    init_text = MathTex(r"\text{Random Variables } X \in \{0, 1\}")
+    init_text_title = MathTex(r"\text{Decision Output } \implies")
+    init_text_title.shift(2*UP)
+    init_text = MathTex(r" \text{Random Variable } X \in \{0, 1\}")
     init_text.shift(UP)
+    s.play(Create(init_text_title))
     s.play(Create(init_text))
     s.wait()
 
-    formula_text = MathTex(r'P[|', r'\bar{E}_t[X] - E[X]| \geq \varepsilon(t, \delta)] \leq \delta')
+    formula_text = MathTex(r'P[|', r'\bar{E}_t[X] - E[X]| \geq \varepsilon(t, \delta)] \leq \delta', color=BLUE)
+    #formula_text.shift()
     s.play(Create(formula_text))
     s.wait()
+    movement_line = Line(start=formula_text.get_center(), end=2*UP)
 
-    figure_ax = Axes(x_range=[0, 100], y_range=[-0.2, 1.2], y_length=2, x_length=10)
-    figure_ax.next_to(formula_text, DOWN)
+    s.play(FadeOut(init_text), FadeOut(init_text_title))
+    
+    s.play(MoveAlongPath(formula_text, movement_line))    
+
+    figure_ax = Axes(x_range=[0, 100, 20], y_range=[-0.2, 1.2, 0.5], y_length=3, x_length=8,
+                     x_axis_config={
+                        "longer_tick_multiple": 20
+                     },
+                     tips=False)
+    figure_ax.next_to(formula_text, 2*DOWN)
     s.add(figure_ax)
+    s.wait()
 
+def optimization(s: Scene, scene_name="opt"):
+    s.next_section(scene_name)
+    title = Tex("\section*{Optimization and Auditing}")
+    title.shift(2.5*UP)
+    s.add(title)
+    s.wait()
+
+def thanks_slide(s: Scene, scene_name="thanks"):
+    s.next_section(scene_name)
+    title = Tex(r"\section*{Resources}")
+    title.shift(2*UP)
+    s.add(title)
+    thanks_text = Tex("More details in the paper/code.").scale(0.7)
+    
+    s.play(Create(thanks_text))
+    s.wait()
+
+    code_link = Tex("https://github.com/pranavmaneriker/AVOIR", color=BLUE).scale(0.7)
+    code_link.next_to(thanks_text, DOWN)
+
+    s.play(FadeIn(code_link))
+    s.wait()
+    
 
 class AVOIRVideo(Scene):
     def construct(self):
@@ -150,5 +187,7 @@ class AVOIRVideo(Scene):
             0: title_slide,
             1: avoir_goal,
             2: avoir_probabilstic_est,
-            3: implementation
+            3: implementation,
+            4: optimization,
+            5: thanks_slide
         }[sno](self)
