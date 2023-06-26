@@ -1,6 +1,10 @@
 from manim import *
 import numpy as np
 import math
+from manim_voiceover import VoiceoverScene
+from manim_voiceover.services.recorder import RecorderService
+from manim_voiceover.services.gtts import GTTSService
+#from manim_voiceover.services.coqui import CoquiService
 
 
 ## The scene setup can be an annotation
@@ -8,6 +12,7 @@ import math
 def title_slide(s: Scene, section_name="title"):
     s.next_section(section_name)
     #img = ImageMobject("images/OSU-logo.png")
+    #with s.voiceover(text="This circle is drawn as I speak.") as tracker:
     img = SVGMobject("images/OSU-logo.svg")
     #img.scale(3)
     bg_rect = BackgroundRectangle(img, color=WHITE)
@@ -16,13 +21,14 @@ def title_slide(s: Scene, section_name="title"):
     text1.shift(UP)
     s.add(text1)
     text_emails = Tex(r'''\{maneriker.1, burley.22, parthasarathy.2\} \\
-                      @osu.edu''')
+                    @osu.edu''')
     text_emails.shift(DOWN)
     s.add(text_emails)
+    ####
     text_conf = Tex("KDD 2023")
     text_conf.shift(2*DOWN)
     s.add(text_conf)
-    Group(img, bg_rect).next_to(text_conf, DOWN + LEFT)
+    Group(img, bg_rect).scale(0.7).next_to(text1, UP +  LEFT)
     s.add(bg_rect)
     s.add(img)
     s.wait(duration=5*DEFAULT_WAIT_TIME)
@@ -65,7 +71,7 @@ def avoir_goal(s: Scene, section_name="avoir_goal"):
     tri_base = Triangle()
     tri_base.next_to(seesaw_line, DOWN)
     seesaw = Group(seesaw_except_base, tri_base)
-    seesaw.next_to(svg_2, 5*DOWN)
+    seesaw.next_to(svg_2, 4.5*DOWN)
     s.add(seesaw)
     
     # three part animation
@@ -114,6 +120,12 @@ def avoir_probabilstic_est(s: Scene, scene_name="avoir_challenge"):
     s.play(FadeOut(sel_text_1, sel_rect_1))
 
     
+def ah_confidence(t, delta):
+    if t >= 5:
+        return np.sqrt(0.6 * np.log(np.log(t)/np.log(1.1) + 5 * np.log(24/delta)/9))/np.sqrt(t)
+    else:
+        return 1e6
+
 def implementation(s: Scene, scene_name="implementaiton"):
     s.next_section(scene_name)
     chart_title = Tex(r"\section*{Implementation}")
@@ -138,13 +150,22 @@ def implementation(s: Scene, scene_name="implementaiton"):
     
     s.play(MoveAlongPath(formula_text, movement_line))    
 
-    figure_ax = Axes(x_range=[0, 100, 20], y_range=[-0.2, 1.2, 0.5], y_length=3, x_length=8,
+    ax = Axes(x_range=[20, 1000, 20], y_range=[-0.2, 1.2, 0.5], y_length=3, x_length=8,
                      x_axis_config={
                         "longer_tick_multiple": 20
                      },
                      tips=False)
-    figure_ax.next_to(formula_text, 2*DOWN)
-    s.add(figure_ax)
+    ax.next_to(formula_text, 2*DOWN)
+    s.add(ax)
+    delta = 0.05
+    main_plot_func = lambda x:  0.5 + np.sin(x/20)/(x/20+1)
+
+    main_plot = ax.plot(main_plot_func, color=BLUE)
+    ub_plot = ax.plot(lambda x: main_plot_func(x) + ah_confidence(x, delta), color=RED)
+    bw_area = ax.get_area(ub_plot, [20, 1000], bounded_graph=main_plot, color=BLUE_B, fill_opacity=0.5)
+
+    all_plots = [Create(main_plot), Create(ub_plot), Write(bw_area)]
+    s.play(*all_plots)
     s.wait()
 
 def optimization(s: Scene, scene_name="opt"):
@@ -167,17 +188,24 @@ def thanks_slide(s: Scene, scene_name="thanks"):
     code_link = Tex("https://github.com/pranavmaneriker/AVOIR", color=BLUE).scale(0.7)
     code_link.next_to(thanks_text, DOWN)
 
+    tool_link = Tex(r"Video made using Manim (https://www.manim.community/)", color=YELLOW).scale(0.7)
+    tool_link.next_to(code_link, DOWN)
+
     s.play(FadeIn(code_link))
+    s.play(FadeIn(tool_link))
     s.wait()
     
 
-class AVOIRVideo(Scene):
+class AVOIRVideo(VoiceoverScene):
     def construct(self):
         # sections
+        #self.set_speech_service(GTTSService())
+        #self.set_speech_service(GTTSService())
+        self.set_speech_service(RecorderService())
 
         # slide 1:
-        SLIDES = [3]
-        #SLIDES = range(3)
+        #SLIDES = [3]
+        SLIDES = range(6)
         for s in SLIDES:
             self.make_slide(s)
             self.clear()
