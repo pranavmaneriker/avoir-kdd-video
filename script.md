@@ -75,13 +75,13 @@ Confidence statement expression and plot
 > and these guarantees are asymptotically true. We call these terms elementary subexpressions
 
 
+***
+## 5. Challenge: Optimization
 > We then devise a grammar and inference rules that allow computation of guarantees are combinations of these elementary subepressions.
 
 ```
 Show graph combination of two terms producing an overall confidence
 ```
-***
-## 5. Challenge: Optimization
 > The next question is this - given a fixed budget/probability threshold, can we distribute it such that we can achieve this across multiple expressions while minimizing the total number of samples?
 
 ```

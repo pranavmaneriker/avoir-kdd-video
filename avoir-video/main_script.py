@@ -106,7 +106,8 @@ def avoir_probabilstic_est(s: Scene, scene_name="avoir_challenge"):
     sel_text_2 = Tex("Threshold probability").scale(0.7)
     sel_text_2.next_to(sel_rect_2, DOWN)
     s.play(Create(sel_text_2), Create(sel_rect_2))
-    s.play(FadeOut(sel_text_2, sel_rect_2))
+    s.wait()
+    s.play(Uncreate(sel_text_2, sel_rect_2))
 
     sel_rect_1 = SurroundingRectangle(anytime_true[1], color=YELLOW)
     sel_text_1 = Tex(r"\# Observed Samples").scale(0.7)
@@ -117,7 +118,7 @@ def avoir_probabilstic_est(s: Scene, scene_name="avoir_challenge"):
     s.play(Create(sel_rect_1))
     s.play(Create(sel_text_1))
     s.wait()
-    s.play(FadeOut(sel_text_1, sel_rect_1))
+    s.play(Uncreate(sel_text_1, sel_rect_1))
 
     
 def ah_confidence(t, delta):
@@ -140,7 +141,7 @@ def implementation(s: Scene, scene_name="implementaiton"):
     s.play(Create(init_text))
     s.wait()
 
-    formula_text = MathTex(r'P[|', r'\bar{E}_t[X] - E[X]| \geq \varepsilon(t, \delta)] \leq \delta', color=BLUE)
+    formula_text = MathTex(r'P[|', r'\bar{E}_t[X]', r'- E[X]| \geq ', r'\varepsilon(t, \delta)',r'] \leq \delta', color=YELLOW)
     #formula_text.shift()
     s.play(Create(formula_text))
     s.wait()
@@ -150,28 +151,116 @@ def implementation(s: Scene, scene_name="implementaiton"):
     
     s.play(MoveAlongPath(formula_text, movement_line))    
 
-    ax = Axes(x_range=[20, 1000, 20], y_range=[-0.2, 1.2, 0.5], y_length=3, x_length=8,
-                     x_axis_config={
-                        "longer_tick_multiple": 20
-                     },
-                     tips=False)
-    ax.next_to(formula_text, 2*DOWN)
+    x_min = 10
+    x_max = 500
+    total_time = 5
+    coords_step = 100
+    x_step = 50
+    x_range = [x_min, x_max+20, x_step]
+    y_range = [0, 2.5, 0.5]
+    ax = Axes(x_range=x_range, y_range=y_range, y_length=3, x_length=8,
+                     axis_config={'tip_shape': StealthTip})
+    ax.next_to(formula_text, 3*DOWN)
     s.add(ax)
-    delta = 0.05
-    main_plot_func = lambda x:  0.5 + np.sin(x/20)/(x/20+1)
+    delta = 0.1
+    curve_col = BLUE_C
+    bound_col = GREEN_B
+    area_col = GRAY
 
-    main_plot = ax.plot(main_plot_func, color=BLUE)
-    ub_plot = ax.plot(lambda x: main_plot_func(x) + ah_confidence(x, delta), color=RED)
-    bw_area = ax.get_area(ub_plot, [20, 1000], bounded_graph=main_plot, color=BLUE_B, fill_opacity=0.5)
+    main_plot_func = lambda x:  0.5 + np.sin(x/coords_step)/(x/(coords_step+1))
+    # plots
+    curve = VGroup()
+    lb_curve = VGroup()
+    ub_curve = VGroup()
+    areas = VGroup()
+    
+    # coordinates
+    coords = [x_min, main_plot_func(20)]
+    single_point = ax.c2p(*coords)
+    ub_point = ax.c2p(coords[0], coords[1] + ah_confidence(x_min, delta))
+    lb_point = ax.c2p(coords[0], coords[1] - ah_confidence(x_min, delta))
+    curve_points = [single_point]
+    ub_points = [ub_point]
+    lb_points = [lb_point]
 
-    all_plots = [Create(main_plot), Create(ub_plot), Write(bw_area)]
-    s.play(*all_plots)
+    curve.add(Line(single_point, single_point, color=curve_col))
+    lb_curve.add(Line(ub_point, ub_point, color=bound_col))
+    ub_curve.add(Line(lb_point, lb_point, color=bound_col))
+
+    x_tracker = ValueTracker(x_min)
+    rate = (x_max-x_min)/total_time
+
+    def plot_updater(m, dt):
+        m.set_value(m.get_value() + rate * dt)
+
+    def redraw_curve():
+        last_point = curve_points[-1]
+        next_x = x_tracker.get_value()
+        next_point = ax.c2p(next_x, main_plot_func(next_x))
+        curve.add(Line(last_point, next_point, color=curve_col))
+        curve_points.append(next_point)
+        return curve
+
+    def redraw_ub():
+        last_point = ub_points[-1] 
+        next_x = x_tracker.get_value()
+        next_point = ax.c2p(next_x, main_plot_func(next_x) + ah_confidence(next_x, delta))
+        ub_curve.add(Line(last_point, next_point, color=bound_col))
+        ub_points.append(next_point)
+        return ub_curve
+
+    def redraw_lb():
+        last_point = lb_points[-1] 
+        next_x = x_tracker.get_value()
+        next_point = ax.c2p(next_x, main_plot_func(next_x) - ah_confidence(next_x, delta))
+        lb_curve.add(Line(last_point, next_point, color=bound_col))
+        lb_points.append(next_point)
+        return lb_curve
+    
+    def redraw_areas():
+        ub_area = [ub_points[-1], ub_points[-2], curve_points[-2], curve_points[-1]]
+        areas.add(Polygon(*ub_area, stroke_width=0).set_opacity(0.3).set_color(area_col))
+        lb_area = [lb_points[-1], lb_points[-2], curve_points[-2], curve_points[-1]]
+        areas.add(Polygon(*lb_area, stroke_width=0).set_opacity(0.3).set_color(area_col))
+        return areas
+
+    x_tracker.add_updater(plot_updater)
+    redrawn_curve = always_redraw(redraw_curve)
+    redrawn_ub = always_redraw(redraw_ub)
+    redrawn_lb = always_redraw(redraw_lb)
+    redrawn_areas = always_redraw(redraw_areas)
+
+
+    s.add(x_tracker, redrawn_curve, redrawn_ub, redrawn_lb, redrawn_areas)
+    
+    #ub_plot = ax.plot(lambda x: main_plot_func(x) + ah_confidence(x, delta), color=RED)
+    #bw_area = ax.get_area(ub_plot, [20, 1000], bounded_graph=main_plot, color=BLUE_B, fill_opacity=0.5)
+
+    #all_plots = [Create(main_plot), Create(ub_plot), Write(bw_area)]
+    #s.play(*all_plots)
+    s.wait(total_time)
+    x_tracker.remove_updater(plot_updater)
+    sel_box = SurroundingRectangle(formula_text[1], color=curve_col)
+    s.play(Create(sel_box))
+    for _ in range(2):
+        s.play(curve.animate.set_stroke(opacity=0))
+        s.play(curve.animate.set_stroke(opacity=1))
+    s.play(Uncreate(sel_box))
+    sel_box = SurroundingRectangle(formula_text[3], color=area_col)
+    s.play(Create(sel_box))
+    for _ in range(2):
+        s.play(areas.animate.set_fill(opacity=0))
+        s.play(areas.animate.set_fill(opacity=1))
+    
+    s.play(areas.animate.set_fill(opacity=0.3), Uncreate(sel_box))
+
     s.wait()
 
 def optimization(s: Scene, scene_name="opt"):
     s.next_section(scene_name)
     title = Tex("\section*{Optimization and Auditing}")
     title.shift(2.5*UP)
+
     s.add(title)
     s.wait()
 
@@ -196,16 +285,17 @@ def thanks_slide(s: Scene, scene_name="thanks"):
     s.wait()
     
 
-class AVOIRVideo(VoiceoverScene):
+class AVOIRVideo(Scene):
     def construct(self):
         # sections
         #self.set_speech_service(GTTSService())
         #self.set_speech_service(GTTSService())
-        self.set_speech_service(RecorderService())
+        #self.set_speech_service(RecorderService())
 
         # slide 1:
         #SLIDES = [3]
         SLIDES = range(6)
+        #SLIDES = [3]
         for s in SLIDES:
             self.make_slide(s)
             self.clear()
