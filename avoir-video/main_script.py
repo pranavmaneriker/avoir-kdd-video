@@ -12,18 +12,18 @@ from manim_voiceover.services.gtts import GTTSService
 def title_slide(s: Scene, section_name="title"):
     s.next_section(section_name)
     #img = ImageMobject("images/OSU-logo.png")
-    #with s.voiceover(text="This circle is drawn as I speak.") as tracker:
-    img = SVGMobject("images/OSU-logo.svg")
-    #img.scale(3)
-    bg_rect = BackgroundRectangle(img, color=WHITE)
-    title_text = r"\section*{Online Fairness Auditing \\ through Iterative Refinement}"
-    text1 = Tex(title_text, height=1.5)
-    text1.shift(UP)
-    s.add(text1)
-    text_emails = Tex(r'''\{maneriker.1, burley.22, parthasarathy.2\} \\
-                    @osu.edu''')
-    text_emails.shift(DOWN)
-    s.add(text_emails)
+    with s.voiceover(text="This circle is drawn as I speak.") as tracker:
+        img = SVGMobject("images/OSU-logo.svg")
+        #img.scale(3)
+        bg_rect = BackgroundRectangle(img, color=WHITE)
+        title_text = r"\section*{Online Fairness Auditing \\ through Iterative Refinement}"
+        text1 = Tex(title_text, height=1.5)
+        text1.shift(UP)
+        s.add(text1)
+        text_emails = Tex(r'''\{maneriker.1, burley.22, parthasarathy.2\} \\
+                        @osu.edu''')
+        text_emails.shift(DOWN)
+        s.add(text_emails)
     ####
     text_conf = Tex("KDD 2023")
     text_conf.shift(2*DOWN)
@@ -256,13 +256,90 @@ def implementation(s: Scene, scene_name="implementaiton"):
 
     s.wait()
 
+def bern_sample(pr=0.5):
+    return np.random.choice([0, 1], p=[1-pr, pr])
+
+class StatefulSampler:
+    def __init__(self, init_samples=0):
+        self.n_samples = 0 
+        self.sample_mean = 0
+        for _ in range(init_samples):
+            self.get_e()
+
+    
+    def get_e(self, *args):
+        val = bern_sample()
+        self.sample_mean = ((self.sample_mean * self.n_samples) + val)
+        self.n_samples += 1
+        self.sample_mean /= self.n_samples
+        return self.sample_mean
+
+
 def optimization(s: Scene, scene_name="opt"):
     s.next_section(scene_name)
     title = Tex("\section*{Optimization and Auditing}")
-    title.shift(2.5*UP)
+    title.shift(3*UP)
+    x_range = [10, 200, 20]
+    y_range = [0, 1, 0.5]
+    step = 10
+    COL_MAIN = BLUE_C
+    COL_AREA = GRAY
+    COL_B = GREEN_B
+    def graph(seed=40):
+        np.random.seed(seed)
+        sampler = StatefulSampler(init_samples=x_range[0])
+        left_axes = Axes(x_range, y_range, x_length=3, y_length=2)
+        left_g = left_axes.plot(sampler.get_e, color=COL_MAIN)
+        coords = left_axes.p2c([p for p in left_g.points])
+        return left_axes, left_g, coords
+
+    def plot_bounds(ub, lb, ax):
+        b_areas = VGroup()
+        for i in range(len(ub) - 1):
+            b_areas.add(Polygon(ax.c2p(*ub[i]), ax.c2p(*ub[i+1]), ax.c2p(*lb[i+1]), ax.c2p(*lb[i]),
+                                stroke_width=0).set_color(COL_AREA).set_opacity(0.5))
+        return b_areas
+
+    def gen_bounds(coords, curve, ax: Axes, delta=0.05, seed=40):
+        bvals = [ah_confidence(c[0], delta) for c in coords]
+        ub = [[c[0], c[1] + bval] for c, bval in zip(coords, bvals)]
+        lb = [[c[0], c[1] - bval] for c, bval in zip(coords, bvals)]
+        b_areas = plot_bounds(ub, lb, ax)
+        return b_areas, ub, lb
+
+    def combine_plot(lub, llb, lcoords, rub, rrb, rcoords, op="+"):
+        if op == "+":
+            c_lb = [[l[0], l[1] + r[1]] for l, r in zip(llb, rlb)]
+            c_ub = [[l[0], l[1] + r[1]] for l, r in zip(lub, rub)]
+
+            coords = [[l[0], l[1], + r[1]] for l, r in zip(lcoords, rcoords)]
+
+        return c_lb, c_ub, coords
+
+
+
 
     s.add(title)
     s.wait()
+
+    la, lg, lcoords = graph(seed=20)
+    VGroup(la, lg).shift(2*LEFT + UP)
+    larea_bounds, lub, llb = gen_bounds(lcoords, lg, la, 0.05)
+    middle_op = MathTex("+")
+    
+    ra, rg, rcoords = graph(seed=40)
+    VGroup(ra, rg).shift(2*RIGHT + UP)
+    rarea_bounds, rub, rlb = gen_bounds(rcoords, rg, ra, 0.05)
+
+    
+    ba = Axes(x_range, y_range, x_length=3, y_length=2)
+
+
+    s.play(Create(la), Create(middle_op), Create(ra), Create(ba))
+    s.play(Create(lg), Create(larea_bounds),)
+    s.wait()
+
+
 
 def thanks_slide(s: Scene, scene_name="thanks"):
     s.next_section(scene_name)
@@ -277,25 +354,28 @@ def thanks_slide(s: Scene, scene_name="thanks"):
     code_link = Tex("https://github.com/pranavmaneriker/AVOIR", color=BLUE).scale(0.7)
     code_link.next_to(thanks_text, DOWN)
 
-    tool_link = Tex(r"Video made using Manim (https://www.manim.community/)", color=YELLOW).scale(0.7)
-    tool_link.next_to(code_link, DOWN)
+    paper_link = Tex("https://doi.org/10.1145/3580305.3599454")
+    paper_link.next_to(code_link, DOWN)
 
-    s.play(FadeIn(code_link))
-    s.play(FadeIn(tool_link))
+    tool_link = Tex(r"Video made using Manim (https://www.manim.community/)", color=YELLOW).scale(0.7)
+    tool_link.next_to(paper_link, DOWN)
+
+    s.play(Create(code_link))
+    s.play(Create(paper_link))
+    s.play(Create(tool_link))
     s.wait()
     
-
-class AVOIRVideo(Scene):
+class AVOIRVideo(VoiceoverScene):
     def construct(self):
         # sections
         #self.set_speech_service(GTTSService())
         #self.set_speech_service(GTTSService())
-        #self.set_speech_service(RecorderService())
+        self.set_speech_service(RecorderService())
 
         # slide 1:
         #SLIDES = [3]
-        SLIDES = range(6)
-        #SLIDES = [3]
+        #SLIDES = range(6)
+        SLIDES = [4]
         for s in SLIDES:
             self.make_slide(s)
             self.clear()
