@@ -279,8 +279,8 @@ def optimization(s: Scene, scene_name="opt"):
     s.next_section(scene_name)
     title = Tex("\section*{Optimization and Auditing}")
     title.shift(3*UP)
-    x_range = [10, 200, 20]
-    y_range = [0, 1, 0.5]
+    x_range = [10, 100, 20]
+    y_range = [0.2, 0.9, 0.2]
     step = 10
     COL_MAIN = BLUE_C
     COL_AREA = GRAY
@@ -307,12 +307,18 @@ def optimization(s: Scene, scene_name="opt"):
         b_areas = plot_bounds(ub, lb, ax)
         return b_areas, ub, lb
 
-    def combine_plot(lub, llb, lcoords, rub, rrb, rcoords, op="+"):
+    def combine_plot(lub, llb, lcoords, rub, rlb, rcoords, op="+"):
         if op == "+":
             c_lb = [[l[0], l[1] + r[1]] for l, r in zip(llb, rlb)]
             c_ub = [[l[0], l[1] + r[1]] for l, r in zip(lub, rub)]
 
-            coords = [[l[0], l[1], + r[1]] for l, r in zip(lcoords, rcoords)]
+            coords = [[l[0], l[1] + r[1]] for l, r in zip(lcoords, rcoords)]
+        elif op == "*":
+            # Does not work generally, but ok in this example
+            c_lb = [[l[0], l[1] * r[1]] for l, r in zip(llb, rlb)]
+            c_ub = [[l[0], l[1] * r[1]] for l, r in zip(lub, rub)]
+
+            coords = [[l[0], l[1] * r[1]] for l, r in zip(lcoords, rcoords)]
 
         return c_lb, c_ub, coords
 
@@ -322,24 +328,114 @@ def optimization(s: Scene, scene_name="opt"):
     s.add(title)
     s.wait()
 
-    la, lg, lcoords = graph(seed=20)
-    VGroup(la, lg).shift(2*LEFT + UP)
-    larea_bounds, lub, llb = gen_bounds(lcoords, lg, la, 0.05)
-    middle_op = MathTex("+")
-    
-    ra, rg, rcoords = graph(seed=40)
-    VGroup(ra, rg).shift(2*RIGHT + UP)
-    rarea_bounds, rub, rlb = gen_bounds(rcoords, rg, ra, 0.05)
+    ### Plus animation
+    def plus_animation():
+        middle_op = MathTex(r"+").scale(2).set_color(YELLOW)
+        middle_op.shift(UP)
 
-    
-    ba = Axes(x_range, y_range, x_length=3, y_length=2)
+        la, lg, lcoords = graph(seed=20)
+        VGroup(la, lg).shift(3*LEFT + UP)
+        larea_bounds, lub, llb = gen_bounds(lcoords, lg, la, 0.05)
+        
+        ra, rg, rcoords = graph(seed=40)
+        VGroup(ra, rg).shift(3*RIGHT + UP)
+        rarea_bounds, rub, rlb = gen_bounds(rcoords, rg, ra, 0.05)
+
+        
+        ba = Axes(x_range, [0, 2, 0.5], x_length=3, y_length=2)
+        blb, bub, bcoords = combine_plot(lub, llb, lcoords, rub, rlb, rcoords, op="+")
+        bg = [Line(ba.c2p(*pi), ba.c2p(*pii), color=COL_MAIN) for (pi, pii) in zip(bcoords, bcoords[1:])]
+        bg = VGroup(*bg)
+        VGroup(bg, ba).shift(2*DOWN)
+        barea_bounds = plot_bounds(bub, blb, ba)
 
 
-    s.play(Create(la), Create(middle_op), Create(ra), Create(ba))
-    s.play(Create(lg), Create(larea_bounds),)
+        s.play(Create(la), Create(ra), Create(ba))
+        s.wait()
+        s.play(Create(middle_op))
+        s.wait()
+        c_obs = [lg, larea_bounds, rg, rarea_bounds, bg, barea_bounds]
+        s.play(*[Create(ob) for ob in c_obs])
+        s.wait()
+        s.play(*[Uncreate(ob) for ob in c_obs])
+        s.wait()
+        ### 
+        return la, ra, ba, middle_op
+
+    la, ra, ba, middle_op = plus_animation()
+
+    def predefined_graph(ax, seed=42):
+        np.random.seed(seed)
+        sampler = StatefulSampler(init_samples=x_range[0])
+        g = ax.plot(sampler.get_e, color=COL_MAIN)
+        coords = ax.p2c([p for p in g.points])
+        return ax, g, coords
+
+    def mult_delta_animation(middle_op, la, ra, ba):
+        new_middle = MathTex(r"\times").scale(2).set_color(YELLOW)
+        new_middle.move_to(middle_op)
+        s.play(Transform(middle_op, new_middle))
+
+        _, lg, lcoords = predefined_graph(la, seed=20)
+        _, rg, rcoords = predefined_graph(ra, seed=40)
+
+        lareas, lub, llb = gen_bounds(lcoords, None, la, delta=1e10)
+        rareas, rub, rlb = gen_bounds(rcoords, None, ra, delta=1e-9)
+
+        bub, blb, bcoords = combine_plot(lub, llb, lcoords, rub, rlb, rcoords, op="*")
+        bg = [Line(ba.c2p(*pi), ba.c2p(*pii), color=COL_MAIN) for (pi, pii) in zip(bcoords, bcoords[1:])]
+        bg = VGroup(*bg)
+        bareas = plot_bounds(bub, blb, ba)
+
+        obs = [lg, rg, bg, lareas, rareas, bareas]
+        s.play(*[Create(ob) for ob in obs])
+        s.wait()
+        import pdb
+        #pdb.set_trace()
+
+        def transform_deltas(delta_1=0.02, delta_2=0.08):
+            lareas2, lub2, llb2 = gen_bounds(lcoords, None, la, delta=delta_1)
+            rareas2, rub2, rlb2 = gen_bounds(rcoords, None, ra, delta=delta_2)
+            #pdb.set_trace()
+
+            bub2, blb2, bcoords2 = combine_plot(lub2, llb2, lcoords, rub2, rlb2, rcoords, op="*")
+            bareas2 = plot_bounds(bub2, blb2, ba)
+            return lareas2, rareas2, bareas2
+        
+        # hacky values for effect, IRL the t varies for each expression causing a bigger shift
+        lareas2, rareas2, bareas2 = transform_deltas(1e-18, 1e10) 
+        for _ in range(2):
+            origs = [lareas.copy(), rareas.copy(), bareas.copy()]
+            s.play(Transform(lareas, lareas2), Transform(rareas, rareas2), Transform(bareas, bareas2))
+            #s.play(Create(lareas2), Create(rareas2), Create(bareas2), Uncreate(lareas), Uncreate(rareas), Uncreate(bareas))
+            s.wait()
+            s.play(Transform(lareas, origs[0]), Transform(rareas, origs[1]), Transform(bareas, origs[2]))
+            s.wait()
+
+        return la, lg, lareas, ra, rg, rareas, ba, bg, bareas
+
+
+    la, lg, lareas, ra, rg, rareas, ba, bg, bareas = mult_delta_animation(middle_op, la, ra, ba)
+    ## Move afuditing
+    grp1 = VGroup(la, lg, lareas)
+    grp1_copy = grp1.copy()
+    grp2 = VGroup(ra, rg, rareas)
+    grp2_copy = grp2.copy()
+    grp3 = VGroup(ba, bg, bareas)
+    s.play(Uncreate(grp1), Uncreate(grp2), Uncreate(middle_op))
     s.wait()
 
-
+    s.play(grp3.animate.shift(3.5*UP))
+    s.wait()
+    lco = grp3.get_corner(LEFT + DOWN)
+    rco = grp3.get_corner(RIGHT + DOWN)
+    ar1 = Arrow(lco, lco + LEFT + DOWN)
+    ar2 = Arrow(rco, rco + RIGHT + DOWN)
+    s.play(Create(ar1), Create(ar2))
+    grp1_copy.next_to(ar1, LEFT)
+    grp2_copy.next_to(ar2, RIGHT)
+    s.play(FadeIn(grp1_copy), FadeIn(grp2_copy))
+    s.wait()
 
 def thanks_slide(s: Scene, scene_name="thanks"):
     s.next_section(scene_name)
@@ -354,7 +450,7 @@ def thanks_slide(s: Scene, scene_name="thanks"):
     code_link = Tex("https://github.com/pranavmaneriker/AVOIR", color=BLUE).scale(0.7)
     code_link.next_to(thanks_text, DOWN)
 
-    paper_link = Tex("https://doi.org/10.1145/3580305.3599454")
+    paper_link = Tex("https://doi.org/10.1145/3580305.3599454", color=GREEN).scale(0.7)
     paper_link.next_to(code_link, DOWN)
 
     tool_link = Tex(r"Video made using Manim (https://www.manim.community/)", color=YELLOW).scale(0.7)
@@ -364,6 +460,7 @@ def thanks_slide(s: Scene, scene_name="thanks"):
     s.play(Create(paper_link))
     s.play(Create(tool_link))
     s.wait()
+
     
 class AVOIRVideo(VoiceoverScene):
     def construct(self):
@@ -374,8 +471,8 @@ class AVOIRVideo(VoiceoverScene):
 
         # slide 1:
         #SLIDES = [3]
-        #SLIDES = range(6)
-        SLIDES = [4]
+        SLIDES = range(6)
+        #SLIDES = [4]
         for s in SLIDES:
             self.make_slide(s)
             self.clear()
