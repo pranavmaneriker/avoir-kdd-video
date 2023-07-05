@@ -1,10 +1,20 @@
+import typing as t
 from manim import *
 import numpy as np
 import math
 from manim_voiceover import VoiceoverScene
+from manim_voiceover.services.base import SpeechService
 from manim_voiceover.services.recorder import RecorderService
 from manim_voiceover.services.gtts import GTTSService
 #from manim_voiceover.services.coqui import CoquiService
+
+
+class NoVoiceOver(SpeechService):
+    def __init__(self, global_speed: float = 1, cache_dir: str | None = None, transcription_model: str | None = None, transcription_kwargs: dict = ..., **kwargs):
+        super().__init__(global_speed, cache_dir, transcription_model, transcription_kwargs, **kwargs)
+    
+    def generate_from_text(self, text: str, cache_dir: str = None, path: str = None) -> dict:
+        pass
 
 
 ## The scene setup can be an annotation
@@ -53,6 +63,7 @@ def avoir_goal(s: Scene, section_name="avoir_goal"):
         s.play(Transform(text2, text3))
 
 
+    s.next_section()
     svg_1 = SVGMobject("images/2/2_1.svg")
     svg_1.shift(3*LEFT)
     with s.voiceover("AVOIR takes a stream of data and labels at runtime as input which has been produced as the output of a black box model"):
@@ -87,7 +98,7 @@ def avoir_goal(s: Scene, section_name="avoir_goal"):
         s.add(seesaw)
     
     # three part animation
-    with s.voiceover("As more data becomes available, AVOIR generates more refined estimates.") as tracker:
+    #with s.voiceover("As more data becomes available, AVOIR generates more refined estimates.") as tracker:
         anim_seesaw = Succession(Rotate(seesaw_except_base, angle=PI/8, run_time=1.5),
                                 Rotate(seesaw_except_base, angle=-PI/4, run_time=2),
                                 lag_ratio=1)
@@ -440,19 +451,19 @@ def optimization(s: Scene, scene_name="opt"):
         
         # hacky values for effect, IRL the t varies for each expression causing a bigger shift
         lareas2, rareas2, bareas2 = transform_deltas(1e-18, 1e10) 
-        for _ in range(2):
-            origs = [lareas.copy(), rareas.copy(), bareas.copy()]
-            s.play(Transform(lareas, lareas2), Transform(rareas, rareas2), Transform(bareas, bareas2))
-            #s.play(Create(lareas2), Create(rareas2), Create(bareas2), Uncreate(lareas), Uncreate(rareas), Uncreate(bareas))
-            s.wait()
-            s.play(Transform(lareas, origs[0]), Transform(rareas, origs[1]), Transform(bareas, origs[2]))
-            s.wait()
+        with s.voiceover("""Further, AVOIR also deteermines how to optimally allocate probabilities to the different terms 
+        within a fairness definition to mimimize the total number of samples required to reach a specified overall threshold. We show that AVOIR can provably achieve guarantees in fewer samples than prior state-of-the-art.""") as tracker:
+            for _ in range(2):
+                origs = [lareas.copy(), rareas.copy(), bareas.copy()]
+                s.play(Transform(lareas, lareas2), Transform(rareas, rareas2), Transform(bareas, bareas2))
+                #s.play(Create(lareas2), Create(rareas2), Create(bareas2), Uncreate(lareas), Uncreate(rareas), Uncreate(bareas))
+                s.wait()
+                s.play(Transform(lareas, origs[0]), Transform(rareas, origs[1]), Transform(bareas, origs[2]))
+                s.wait()
 
         return la, lg, lareas, ra, rg, rareas, ba, bg, bareas
 
-    with s.voiceover("""Further, AVOIR also deteermines how to optimally allocate probabilities to the different terms 
-    within a fairness definition to mimimize the total number of samples required to reach a specified overall threshold. We show that AVOIR can provably achieve guarantees in fewer samples than prior state-of-the-art.""") as tracker:
-        la, lg, lareas, ra, rg, rareas, ba, bg, bareas = mult_delta_animation(middle_op, la, ra, ba)
+    la, lg, lareas, ra, rg, rareas, ba, bg, bareas = mult_delta_animation(middle_op, la, ra, ba)
     ## Move afuditing
     grp1 = VGroup(la, lg, lareas)
     grp1_copy = grp1.copy()
@@ -507,11 +518,15 @@ class AVOIRVideo(VoiceoverScene):
     def construct(self):
         # sections
         #self.set_speech_service(GTTSService())
-        self.set_speech_service(RecorderService())
+        #self.set_speech_service(RecorderService())
+        #self.set_speech_service(service)
+        self.set_speech_service(NoVoiceOver())
+
 
         # slide 1:
         #SLIDES = [3]
         SLIDES = range(6)
+        #SLIDES = [0, 1, 3, 4, 5]
         #SLIDES = [4]
         for s in SLIDES:
             self.make_slide(s)
